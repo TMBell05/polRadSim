@@ -28,8 +28,8 @@ clc
 %%%%%%%%%%%%%%%%%%%%%%%%%  Define Paths and Files  %%%%%%%%%%%%%%%%%%%%%%%%
 
 % biological behavior model input file name
-bioFileName = 'run/new_bat_model1.mat';
-% scatter model look-up table file name
+bioFileName = '../bioSim/new_bat_model1.mat';
+% scatter model look-uptable file name
 sctFileName = 'batScatter.mat';
 
 % output IQ file save name
@@ -71,7 +71,7 @@ scanRate = 3;                 % pedestal scan rate       [degrees/sec]
 elSet    = [0.5];             % elevation angles         [degrees]
 dAz      = 1;                 % azimuthal steps        [degrees]
 azSet    = 1:dAz:360;         % azimuthal angles         [degrees]
-nVols    = 2;                 % number of volume scans   [#]
+nVols    = 4;                 % number of volume scans   [#]
 
 
 %%%%%%%%%%%%%%%%  Define Biological Model Reference Frame  %%%%%%%%%%%%%%%%
@@ -172,7 +172,7 @@ elTm = single(kron(elSet,ones(1,dwellNum*nAzs)));
 
 
 %% loop over and save each volume scan
-for volCtr = 2:nVols
+for volCtr = 4:nVols
     
     
     %% preallocate space for time series data for this volume
@@ -192,7 +192,8 @@ for volCtr = 2:nVols
     
     agntVel = diff(agntPos,1,3);
     agntVel = cat(3,agntVel,agntVel(:,:,end));
-    idx            = str2double(bioFileName(find(bioFileName=='.')-1));
+    tmp = find(bioFileName=='.');
+    idx = str2double(bioFileName(tmp(end)-1));
     if ceil(volCtr*volTime)+1 > idx*size(agntPos,3)*dt
         %% at end of bio model file, check for others
         if interactiveIO,disp('Passed end of current bio model file. Looking for extensions.'), end
@@ -275,7 +276,7 @@ for volCtr = 2:nVols
                 save('-v7.3',saveName,'Vv','rngSet','elSet','azSet','volTime','header')
               end
               if interactiveIO,fprintf('Volume scan %g of %g completed.\n',volCtr,nVols), end
-             clear bioPos bioVel saveName Vv Vh
+              clear bioPos bioVel saveName Vv Vh
               break
           end
         end
@@ -524,16 +525,38 @@ for volCtr = 2:nVols
         
     end % end bio model time step
     
+    %% arrange pulses into sweeps
+    if strcmp(polType,'STSR')||strcmp(polType,'HORZ')
+    tmp = reshape(Vh,   dwellNum,nAzs,nEls,nGates);
+    Vh  = permute(tmp,[2 1 4 3]);
+    end
+    if strcmp(polType,'STSR')||strcmp(polType,'VERT')
+    tmp = reshape(Vv,   dwellNum,nAzs,nEls,nGates);
+    Vv = permute(tmp,[2 1 4 3]);
+    end
+
+    %% save time series data for completed volume scan
+    saveName = [iqSaveName num2str(ceil(volCtr*volTime)) '.mat'];
+    if interactiveIO,fprintf('Saving: %s/\n',saveName), end
+    if strcmp(polType,'STSR')
+        save('-v7.3',saveName,'Vh','Vv','rngSet','elSet','azSet','volTime','header')
+    elseif strcmp(polType,'HORZ')
+        save('-v7.3',saveName,'Vh','rngSet','elSet','azSet','volTime','header')
+    elseif strcmp(polType,'VERT')
+        save('-v7.3',saveName,'Vv','rngSet','elSet','azSet','volTime','header')
+    end
+    if interactiveIO,fprintf('Volume scan %g of %g completed.\n',volCtr,nVols), end
+    clear bioPos bioVel saveName Vv Vh
     
 end % end radar volume scans
 
 %% Reshape stuff for plotting
 if strcmp(polType,'STSR')||strcmp(polType,'HORZ')
-    tmp = reshape(Vh,dwellNum,nAzs,nEls,nGates);
+    tmp = reshape(Vh,  dwellNum,nAzs,nEls,nGates);
     Vh  = permute(tmp,[2 1 4 3]);
 end
 if strcmp(polType,'STSR')||strcmp(polType,'VERT')
-    tmp = reshape(Vv,dwellNum,nAzs,nEls,nGates);
+    tmp = reshape(Vv,  dwellNum,nAzs,nEls,nGates);
     Vv = permute(tmp,[2 1 4 3]);
 end
 
@@ -573,6 +596,6 @@ ringYY = ringRng.*cosd(ringAz);
 plot(ringXX,ringYY,'k','linewidth',1)
 plot(spurXX,spurYY,'k','linewidth',1)
 
-plot(bioPos(:,1,21),bioPos(:,2,21),'k.')
+% plot(bioPos(:,1,21),bioPos(:,2,21),'k.')
 plot(0,0,'ko')
 axis([-20000 20000 -20000 20000])
